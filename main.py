@@ -1,65 +1,29 @@
-import os
-import requests
 from fastapi import FastAPI, Request
-from dotenv import load_dotenv
-
-# Load environment variables from .env
-load_dotenv()
-
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+import uvicorn
 
 app = FastAPI()
 
-@app.get("/")
-def home():
-    return {"status": "WhatsApp bot is running"}
+# Must exactly match the token you set in the WhatsApp webhook setup
+VERIFY_TOKEN = "my_verify_token"
 
-# Webhook verification
 @app.get("/webhook")
-def verify_webhook(
-    hub_mode: str = None,
-    hub_challenge: str = None,
-    hub_verify_token: str = None
-):
-    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
-        return int(hub_challenge)
-    return {"error": "Verification failed"}
+async def verify_webhook(request: Request):
+    """Webhook verification endpoint for WhatsApp"""
+    mode = request.query_params.get("hub.mode")
+    token = request.query_params.get("hub.verify_token")
+    challenge = request.query_params.get("hub.challenge")
 
-# Receive messages
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return int(challenge)  # WhatsApp expects this exact number
+    return {"error": "Invalid verification token"}
+
 @app.post("/webhook")
 async def receive_message(request: Request):
+    """Handle incoming WhatsApp messages"""
     data = await request.json()
-    print("Incoming webhook data:", data)  # Debug log
+    print("Received message:", data)
+    # You can add reply logic here later
+    return {"status": "ok"}
 
-    try:
-        message = data["entry"][0]["changes"][0]["value"]["messages"][0]
-        phone_number = message["from"]  # sender's number
-        text = message["text"]["body"].strip().lower()
-
-        if text in ["hi", "hello"]:
-            send_whatsapp_message(phone_number, "Hello! 👋 How can I help you today?")
-        else:
-            send_whatsapp_message(phone_number, "Sorry, I didn't understand that.")
-
-    except KeyError:
-        print("No valid message in the webhook payload.")
-
-    return {"status": "success"}
-
-# Send message function
-def send_whatsapp_message(to, message):
-    url = f"https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "text": {"body": message}
-    }
-    response = requests.post(url, headers=headers, json=payload)
-    print("Send message response:", response.status_code, response.text)
-    return response.json()
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=10000)
