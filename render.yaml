@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: whatsapp-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: VERIFY_TOKEN
+        value: my_verify_token   # same token you set in WhatsApp webhook setup
+      - key: WHATSAPP_TOKEN
+        sync: false              # set in Render dashboard
+      - key: PHONE_NUMBER_ID
+        sync: false              # set in Render dashboard
