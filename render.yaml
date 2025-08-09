@@ -4,11 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
- 
+    
     envVars:
       - key: VERIFY_TOKEN
-        value: my_verify_token  # same token you set in Meta webhook
-      - key: WHATSAPP_TOKEN
-        sync: false             # put in Render dashboard -> Environment Variables
-      - key: PHONE_NUMBER_ID
-        sync: false             # put in Render dashboard -> Environment Variables
+        value: my_verify_token
