@@ -2,9 +2,12 @@ services:
   - type: web
     name: whatsapp-bot
     env: python
-    plan: free
     buildCommand: pip install -r requirements.txt
     
     envVars:
       - key: VERIFY_TOKEN
         value: my_verify_token
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: PHONE_NUMBER_ID
+        sync: false
