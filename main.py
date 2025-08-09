@@ -1,66 +1,46 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+import requests
 import os
+
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
 app = FastAPI()
 
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "my_verify_token")  # set in Render environment variables
-
-@app.get("/")
-def home():
-    return {"status": "FastAPI WhatsApp Bot is running"}
-
-# Webhook verification (GET)
 @app.get("/webhook")
-async def verify_token(request: Request):
-    params = request.query_params
-    mode = params.get("hub.mode")
-    token = params.get("hub.verify_token")
-    challenge = params.get("hub.challenge")
+async def verify_webhook(hub_mode: str = None, hub_challenge: str = None, hub_verify_token: str = None):
+    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
+        return int(hub_challenge)
+    return JSONResponse({"error": "Verification failed"}, status_code=403)
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return JSONResponse(content=int(challenge))
-    return JSONResponse(content="Verification failed", status_code=403)
-
-# Handle incoming messages (POST)
 @app.post("/webhook")
-async def receive_message(request: Request):
+async def handle_webhook(request: Request):
     data = await request.json()
+    print("Incoming webhook:", data)
+
     try:
-        for entry in data.get("entry", []):
-            for change in entry.get("changes", []):
-                value = change.get("value", {})
-                messages = value.get("messages", [])
-                if messages:
-                    from_number = messages[0]["from"]
-                    text_body = messages[0]["text"]["body"]
+        message = data["entry"][0]["changes"][0]["value"]["messages"][0]
+        from_number = message["from"]
+        text = message["text"]["body"]
 
-                    print(f"Message from {from_number}: {text_body}")
+        # Send reply back to WhatsApp
+        url = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
+        headers = {
+            "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": from_number,
+            "type": "text",
+            "text": {"body": f"Hello! You said: {text}"}
+        }
+        r = requests.post(url, headers=headers, json=payload)
+        print("Reply status:", r.status_code, r.text)
 
-                    # Greeting logic
-                    if text_body.lower() in ["hi", "hello"]:
-                        send_whatsapp_message(from_number, "Hello! 👋 How can I help you today?")
-                    else:
-                        send_whatsapp_message(from_number, f"You said: {text_body}")
+    except KeyError:
+        print("No messages found in webhook payload.")
 
-        return JSONResponse(content={"status": "success"})
-    except Exception as e:
-        print("Error:", e)
-        return JSONResponse(content={"status": "error"}, status_code=500)
-
-
-# Send message back via WhatsApp Cloud API
-import requests
-def send_whatsapp_message(to, message):
-    url = f"https://graph.facebook.com/v18.0/{os.getenv('PHONE_NUMBER_ID')}/messages"
-    headers = {
-        "Authorization": f"Bearer {os.getenv('WHATSAPP_TOKEN')}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "text": {"body": message}
-    }
-    requests.post(url, headers=headers, json=payload)
-
+    return JSONResponse({"status": "ok"})
